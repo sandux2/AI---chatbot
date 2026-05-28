@@ -11,6 +11,10 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 st.title("AI Document Chatbot")
 st.write("Upload a PDF and ask questions about it!")
 
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
 uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
 
 if uploaded_file is not None:
@@ -20,17 +24,36 @@ if uploaded_file is not None:
         pdf_text += page.extract_text()
     
     st.success("PDF loaded successfully!")
-    
-    question = st.text_input("Ask a question about the document:")
-    
+
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
+    # Chat input
+    question = st.chat_input("Ask a question about the document:")
+
     if question:
+        # Add user message to history
+        st.session_state.messages.append({"role": "user", "content": question})
+        with st.chat_message("user"):
+            st.write(question)
+
+        # Build messages for GPT including history
+        gpt_messages = [
+            {"role": "system", "content": f"You are a helpful assistant. Answer questions based on this document:\n{pdf_text}"}
+        ]
+        gpt_messages += st.session_state.messages
+
+        # Get GPT response
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that answers questions strictly based on the provided document. Only use information from the document to answer."},
-                {"role": "user", "content": f"Document content:\n{pdf_text}\n\nQuestion: {question}"}
-            ]
+            messages=gpt_messages
         )
-        
-        st.write("**Answer:**")
-        st.write(response.choices[0].message.content)
+
+        answer = response.choices[0].message.content
+
+        # Add assistant response to history
+        st.session_state.messages.append({"role": "assistant", "content": answer})
+        with st.chat_message("assistant"):
+            st.write(answer)
